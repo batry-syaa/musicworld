@@ -4,7 +4,7 @@ const save=()=>{try{localStorage.setItem("mw_albums",JSON.stringify(albums));loc
 const rid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const aud=$("aud");
-if($("ver"))$("ver").textContent="v6 ✓";
+if($("ver"))$("ver").textContent="v7 ✓";
 (()=>{const g=["✦","♡","★","✧","♡","✦"];for(let i=0;i<22;i++){const e=document.createElement("div");e.className="spark";e.textContent=g[i%g.length];e.style.left=Math.random()*96+"vw";e.style.top=Math.random()*94+"vh";e.style.fontSize=(14+Math.random()*22)+"px";e.style.animationDelay=(Math.random()*3)+"s";$("sp").appendChild(e)}})();
 
 $("enter").onclick=()=>{$("welcome").style.display="none";$("app").style.display="block";connect()};
@@ -84,6 +84,7 @@ let ctrl=null,yt=null,sp=null,tick=null,token=0,ytP=null,spP=null,spDur=0,lastEn
 const loadScript=src=>new Promise(r=>{const s=document.createElement("script");s.src=src;s.onload=r;document.head.appendChild(s)});
 const getYT=()=>{if(window.YT&&YT.Player)return Promise.resolve();return ytP||(ytP=new Promise(r=>{window.onYouTubeIframeAPIReady=r;loadScript("https://www.youtube.com/iframe_api")}))};
 const getSP=()=>spP||(spP=new Promise(r=>{window.onSpotifyIframeApiReady=a=>r(a);loadScript("https://open.spotify.com/embed/iframe-api/v1")}));
+const pstat=t=>{const e=$("pstat");if(e)e.textContent=t};
 function setPlaying(b){$("play").textContent=b?"⏸":"▶";$("vinyl").classList.toggle("on",!!b)}
 function setProg(f){$("fill").style.width=(Math.max(0,Math.min(1,f||0))*100)+"%"}
 function songEnded(){const t=Date.now();if(t-lastEnd>2000){lastEnd=t;$("next").click()}}
@@ -91,7 +92,7 @@ function stopAll(){
   aud.pause();aud.removeAttribute("src");clearInterval(tick);
   try{yt&&yt.destroy()}catch(e){}yt=null;
   try{sp&&sp.destroy()}catch(e){}sp=null;
-  ctrl=null;$("embed").innerHTML="";setPlaying(false);setProg(0);
+  ctrl=null;$("embed").innerHTML="";setPlaying(false);setProg(0);pstat("");
 }
 function playSong(i){
   const list=songs.filter(s=>s.albumId===cur);if(!list[i])return;
@@ -104,9 +105,16 @@ function playSong(i){
     const id=m.src.split("/embed/")[1].split("?")[0];
     const d=document.createElement("div");d.id="ytdiv";$("embed").appendChild(d);
     getYT().then(()=>{ if(my!==token)return;
+      pstat("YouTube loading…");
       yt=new YT.Player("ytdiv",{width:"100%",height:220,videoId:id,playerVars:{autoplay:1,playsinline:1,rel:0},events:{
-        onStateChange:e=>{if(e.data===1)setPlaying(true);else if(e.data===2)setPlaying(false);else if(e.data===0){setPlaying(false);songEnded()}}}});
-      ctrl={toggle:()=>{yt.getPlayerState()===1?yt.pauseVideo():yt.playVideo()},seek:f=>{const t=yt.getDuration();if(t)yt.seekTo(f*t,true)}};
+        onReady:()=>{if(my!==token)return;
+          ctrl={toggle:()=>{const s=yt.getPlayerState();if(s===1||s===3)yt.pauseVideo();else yt.playVideo()},seek:f=>{const t=yt.getDuration();if(t)yt.seekTo(f*t,true)}};
+          pstat("YouTube ready");try{yt.playVideo()}catch(e){}},
+        onStateChange:e=>{if(my!==token)return;
+          if(e.data===1){setPlaying(true);pstat("▶ playing")}
+          else if(e.data===2){setPlaying(false);pstat("⏸ paused")}
+          else if(e.data===0){setPlaying(false);songEnded()}},
+        onError:e=>{if(my===token)pstat("YouTube error "+e.data+": this video can't be played here, try another link")}}});
       tick=setInterval(()=>{try{const t=yt.getDuration();if(t)setProg(yt.getCurrentTime()/t)}catch(e){}},500);
     });
   }else if(m&&m.t==="embed"){
@@ -116,8 +124,8 @@ function playSong(i){
       api.createController(d,{uri:"spotify:"+x[1]+":"+x[2],width:"100%",height:m.h},c=>{
         if(my!==token){try{c.destroy()}catch(e){}return}
         sp=c;spDur=0;
-        c.addListener("ready",()=>c.play());
-        c.addListener("playback_update",e=>{const p=e.data;if(!p)return;spDur=p.duration||0;setPlaying(!p.isPaused);if(spDur)setProg(p.position/spDur);if(spDur&&p.position>=spDur-400&&p.isPaused)songEnded()});
+        pstat("Spotify loading…");c.addListener("ready",()=>{pstat("Spotify ready");c.play()});
+        c.addListener("playback_update",e=>{const p=e.data;if(!p)return;spDur=p.duration||0;setPlaying(!p.isPaused);pstat(p.isPaused?"⏸ paused":"▶ playing");if(spDur)setProg(p.position/spDur);if(spDur&&p.position>=spDur-400&&p.isPaused)songEnded()});
         ctrl={toggle:()=>c.togglePlay(),seek:f=>{if(spDur)c.seek(f*spDur/1000)}};
       });
     });
@@ -128,7 +136,7 @@ function playSong(i){
   render();
   if(window.innerWidth<=760)$("nowT").scrollIntoView({behavior:"smooth",block:"center"});
 }
-$("play").onclick=()=>{if(ctrl)ctrl.toggle()};
+$("play").onclick=()=>{if(ctrl){try{ctrl.toggle()}catch(e){pstat("Player error: "+e.message)}}else pstat(idx<0?"Pick a song first":"Player is still loading…")};
 $("next").onclick=()=>{const n=songs.filter(s=>s.albumId===cur).length;if(n)playSong((idx+1)%n)};
 $("prev").onclick=()=>{const n=songs.filter(s=>s.albumId===cur).length;if(n)playSong((idx-1+n)%n)};
 aud.onplay=()=>setPlaying(true);
