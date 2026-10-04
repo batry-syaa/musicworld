@@ -43,14 +43,15 @@ function render(){
     const list=songs.filter(s=>s.albumId===cur);
     $("songs").innerHTML=list.length?list.map((s,i)=>`<div class="song ${i===idx?"cur":""}" data-i="${i}"><span>${esc(s.title)} <span class="muted">· ${esc(s.artist)}</span></span><span>${s.url?"♪":""}</span></div>`).join(""):'<p class="muted">No songs yet. Add one below ♡</p>';
     document.querySelectorAll(".song").forEach(e=>e.onclick=()=>playSong(+e.dataset.i));
+    if(idx<0){$("nowT").textContent=list.length?"Pick a song":"No songs in this album yet";$("nowA").textContent="";$("lyr").textContent="—"}
   }
 }
 function openAlbum(id){
-  cur=id;idx=-1;const a=albums.find(x=>x.id===id);
+  stopAll();cur=id;idx=-1;$("nowA").textContent="";$("lyr").textContent="—";const a=albums.find(x=>x.id===id);
   $("aTitle").textContent=a?a.name:"";
   $("home").style.display="none";$("album").style.display="block";closeAdd();window.scrollTo(0,0);render();
 }
-$("back").onclick=()=>{cur=null;aud.pause();$("home").style.display="block";$("album").style.display="none";render()};
+$("back").onclick=()=>{cur=null;stopAll();$("home").style.display="block";$("album").style.display="none";render()};
 
 $("addAlbum").onclick=async()=>{
   const name=$("newAlbum").value.trim();if(!name)return;
@@ -78,26 +79,59 @@ function media(u){
   if(/^https?:\/\//i.test(u))return{t:"audio",src:u};
   return null;
 }
+let ctrl=null,yt=null,sp=null,tick=null,token=0,ytP=null,spP=null,spDur=0,lastEnd=0;
+const loadScript=src=>new Promise(r=>{const s=document.createElement("script");s.src=src;s.onload=r;document.head.appendChild(s)});
+const getYT=()=>{if(window.YT&&YT.Player)return Promise.resolve();return ytP||(ytP=new Promise(r=>{window.onYouTubeIframeAPIReady=r;loadScript("https://www.youtube.com/iframe_api")}))};
+const getSP=()=>spP||(spP=new Promise(r=>{window.onSpotifyIframeApiReady=a=>r(a);loadScript("https://open.spotify.com/embed/iframe-api/v1")}));
+function setPlaying(b){$("play").textContent=b?"⏸":"▶";$("vinyl").classList.toggle("on",!!b)}
+function setProg(f){$("fill").style.width=(Math.max(0,Math.min(1,f||0))*100)+"%"}
+function songEnded(){const t=Date.now();if(t-lastEnd>2000){lastEnd=t;$("next").click()}}
+function stopAll(){
+  aud.pause();aud.removeAttribute("src");clearInterval(tick);
+  try{yt&&yt.destroy()}catch(e){}yt=null;
+  try{sp&&sp.destroy()}catch(e){}sp=null;
+  ctrl=null;$("embed").innerHTML="";setPlaying(false);setProg(0);
+}
 function playSong(i){
   const list=songs.filter(s=>s.albumId===cur);if(!list[i])return;
-  idx=i;const s=list[i];
+  idx=i;const s=list[i],my=++token;
   $("nowT").textContent=s.title;$("nowA").textContent=s.artist;$("lyr").textContent=s.lyrics||"No lyrics added.";
-  const e=$("embed");e.innerHTML="";aud.pause();aud.removeAttribute("src");
+  stopAll();
   const m=media(s.url||"");
-  if(m&&m.t==="embed"){
-    const f=document.createElement("iframe");f.src=m.src;f.width="100%";f.height=m.h;f.style.border="0";f.style.borderRadius="14px";
-    f.allow="autoplay; encrypted-media; clipboard-write; fullscreen";f.loading="lazy";e.appendChild(f);
-    $("vinyl").classList.add("on");
-  }else if(m){aud.src=m.src;aud.play().catch(()=>{})}
-  else{$("nowA").textContent=(s.artist||"")+" · (no link added)";$("vinyl").classList.remove("on")}
+  const u=s.url||"";
+  if(m&&m.t==="embed"&&m.src.includes("youtube")){
+    const id=m.src.split("/embed/")[1].split("?")[0];
+    const d=document.createElement("div");d.id="ytdiv";$("embed").appendChild(d);
+    getYT().then(()=>{ if(my!==token)return;
+      yt=new YT.Player("ytdiv",{width:"100%",height:220,videoId:id,playerVars:{autoplay:1,playsinline:1,rel:0},events:{
+        onStateChange:e=>{if(e.data===1)setPlaying(true);else if(e.data===2)setPlaying(false);else if(e.data===0){setPlaying(false);songEnded()}}}});
+      ctrl={toggle:()=>{yt.getPlayerState()===1?yt.pauseVideo():yt.playVideo()},seek:f=>{const t=yt.getDuration();if(t)yt.seekTo(f*t,true)}};
+      tick=setInterval(()=>{try{const t=yt.getDuration();if(t)setProg(yt.getCurrentTime()/t)}catch(e){}},500);
+    });
+  }else if(m&&m.t==="embed"){
+    const x=u.match(/open\.spotify\.com\/(?:intl-[a-z]+\/)?(track|album|playlist|episode)\/(\w+)/);
+    const d=document.createElement("div");$("embed").appendChild(d);
+    getSP().then(api=>{ if(my!==token)return;
+      api.createController(d,{uri:"spotify:"+x[1]+":"+x[2],width:"100%",height:m.h},c=>{
+        if(my!==token){try{c.destroy()}catch(e){}return}
+        sp=c;spDur=0;
+        c.addListener("ready",()=>c.play());
+        c.addListener("playback_update",e=>{const p=e.data;if(!p)return;spDur=p.duration||0;setPlaying(!p.isPaused);if(spDur)setProg(p.position/spDur);if(spDur&&p.position>=spDur-400&&p.isPaused)songEnded()});
+        ctrl={toggle:()=>c.togglePlay(),seek:f=>{if(spDur)c.seek(f*spDur/1000)}};
+      });
+    });
+  }else if(m){
+    aud.src=m.src;aud.play().catch(()=>{});
+    ctrl={toggle:()=>{aud.paused?aud.play():aud.pause()},seek:f=>{if(aud.duration)aud.currentTime=f*aud.duration}};
+  }else{$("nowA").textContent=(s.artist||"")+" · (no link added)"}
   render();
   if(window.innerWidth<=760)$("nowT").scrollIntoView({behavior:"smooth",block:"center"});
 }
-$("play").onclick=()=>{ if(!aud.src)return; aud.paused?aud.play():aud.pause() };
+$("play").onclick=()=>{if(ctrl)ctrl.toggle()};
 $("next").onclick=()=>{const n=songs.filter(s=>s.albumId===cur).length;if(n)playSong((idx+1)%n)};
 $("prev").onclick=()=>{const n=songs.filter(s=>s.albumId===cur).length;if(n)playSong((idx-1+n)%n)};
-aud.onplay=()=>{$("play").textContent="⏸";$("vinyl").classList.add("on")};
-aud.onpause=()=>{$("play").textContent="▶";$("vinyl").classList.remove("on")};
-aud.onended=()=>$("next").click();
-aud.ontimeupdate=()=>{$("fill").style.width=(aud.duration?aud.currentTime/aud.duration*100:0)+"%"};
-$("bar").onclick=e=>{if(aud.duration){const r=$("bar").getBoundingClientRect();aud.currentTime=(e.clientX-r.left)/r.width*aud.duration}};
+aud.onplay=()=>setPlaying(true);
+aud.onpause=()=>setPlaying(false);
+aud.onended=songEnded;
+aud.ontimeupdate=()=>setProg(aud.duration?aud.currentTime/aud.duration:0);
+$("bar").onclick=e=>{if(ctrl){const r=$("bar").getBoundingClientRect();ctrl.seek((e.clientX-r.left)/r.width)}};
