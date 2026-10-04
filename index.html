@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Music World</title>
+<link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css"></head>
+<body>
+<section id="welcome"><div class="win"><div class="tb"><i></i><i></i><i></i><span>♡ music.exe ♡</span></div><div class="wb">
+  <div class="disc on"></div>
+  <h1>Welcome to the Music World!</h1>
+  <p>Where music calms your nerves ♡</p>
+  <button class="big px" id="enter">✦ Enter ✦</button>
+</div></div></section>
+<div id="sp"></div>
+
+<main id="app">
+  <header>
+    <h2 class="px">MUSIC WORLD</h2>
+    <span id="sync" class="muted"></span>
+    
+  </header>
+  <div id="home">
+    <h3 class="px" style="font-size:14px">Albums</h3>
+    <div class="grid" id="albums"></div>
+    <div class="row" style="max-width:360px;margin-top:20px">
+      <input id="newAlbum" placeholder="New album (e.g. Sarah's Favorites)">
+      <button id="addAlbum">+ Create album</button>
+    </div>
+  </div>
+  <div id="album" style="display:none">
+    <button id="back">← All albums</button>
+    <h3 class="px" id="aTitle" style="font-size:14px;margin:16px 0"></h3>
+    <div class="cols">
+      <div class="panel">
+        <div class="disc" id="vinyl" style="margin:0 auto 12px"></div>
+        <div class="px" id="nowT" style="font-size:12px;text-align:center">Pick a song</div>
+        <div id="nowA" class="muted" style="text-align:center"></div>
+        <div class="bar" id="bar"><i id="fill"></i></div>
+        <div class="ctl">
+          <button id="prev">⏮</button><button class="play" id="play">▶</button><button id="next">⏭</button>
+        </div>
+        <audio id="aud"></audio>
+        <div id="embed" style="margin-top:12px"></div>
+        <h3 class="px" style="font-size:11px;margin-top:18px">Lyrics</h3>
+        <div class="lyrics" id="lyr">—</div>
+      </div>
+      <div class="panel">
+        <h3 class="px" style="font-size:11px;margin-top:0">Songs</h3>
+        <div id="songs"></div>
+        <button id="toggleAdd" style="margin-top:12px">+ Add a song</button>
+        <div class="row" id="addBox" style="display:none;border-top:2px dashed var(--line);padding-top:12px">
+          <input id="sT" placeholder="Song title"><input id="sA" placeholder="Artist">
+          <textarea id="sL" rows="4" placeholder="Lyrics (paste here)"></textarea>
+          <input id="sU" placeholder="Link to play: YouTube, Spotify or .mp3">
+          <button id="addSong">+ Add song &amp; sync</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="script.js"></script>
+</body></html>
