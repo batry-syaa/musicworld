@@ -4,6 +4,7 @@ const save=()=>{try{localStorage.setItem("mw_albums",JSON.stringify(albums));loc
 const rid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const aud=$("aud");
+if($("ver"))$("ver").textContent="v6 ✓";
 (()=>{const g=["✦","♡","★","✧","♡","✦"];for(let i=0;i<22;i++){const e=document.createElement("div");e.className="spark";e.textContent=g[i%g.length];e.style.left=Math.random()*96+"vw";e.style.top=Math.random()*94+"vh";e.style.fontSize=(14+Math.random()*22)+"px";e.style.animationDelay=(Math.random()*3)+"s";$("sp").appendChild(e)}})();
 
 $("enter").onclick=()=>{$("welcome").style.display="none";$("app").style.display="block";connect()};
