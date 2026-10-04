@@ -4,7 +4,6 @@ const save=()=>{try{localStorage.setItem("mw_albums",JSON.stringify(albums));loc
 const rid=()=>Math.random().toString(36).slice(2,10);
 const esc=s=>String(s||"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const aud=$("aud");
-if($("ver"))$("ver").textContent="v7 ✓";
 (()=>{const g=["✦","♡","★","✧","♡","✦"];for(let i=0;i<22;i++){const e=document.createElement("div");e.className="spark";e.textContent=g[i%g.length];e.style.left=Math.random()*96+"vw";e.style.top=Math.random()*94+"vh";e.style.fontSize=(14+Math.random()*22)+"px";e.style.animationDelay=(Math.random()*3)+"s";$("sp").appendChild(e)}})();
 
 $("enter").onclick=()=>{$("welcome").style.display="none";$("app").style.display="block";connect()};
@@ -24,7 +23,7 @@ async function connect(){
     firebase.initializeApp(firebaseConfig);
     db=firebase.firestore();
     let cloudOk=false;
-    const upd=s=>{const ok=!s.metadata.hasPendingWrites&&!s.metadata.fromCache;if(ok)cloudOk=true;$("sync").textContent=ok?"● synced with friends":"◌ saving… (waiting for the cloud)"};
+    const upd=s=>{const ok=!s.metadata.hasPendingWrites&&!s.metadata.fromCache;if(ok)cloudOk=true;if(ok)$("sync").textContent=""};
     setTimeout(()=>{if(!cloudOk)$("sync").textContent="○ NOT reaching the cloud - check Firestore database & rules"},8000);
     const onErr=e=>{$("sync").textContent="○ can't reach the database ("+(e.code||"error")+")"};
     db.collection("albums").onSnapshot({includeMetadataChanges:true},s=>{upd(s);albums=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(a.ts||0)-(b.ts||0));render()},onErr);
@@ -84,7 +83,7 @@ let ctrl=null,yt=null,sp=null,tick=null,token=0,ytP=null,spP=null,spDur=0,lastEn
 const loadScript=src=>new Promise(r=>{const s=document.createElement("script");s.src=src;s.onload=r;document.head.appendChild(s)});
 const getYT=()=>{if(window.YT&&YT.Player)return Promise.resolve();return ytP||(ytP=new Promise(r=>{window.onYouTubeIframeAPIReady=r;loadScript("https://www.youtube.com/iframe_api")}))};
 const getSP=()=>spP||(spP=new Promise(r=>{window.onSpotifyIframeApiReady=a=>r(a);loadScript("https://open.spotify.com/embed/iframe-api/v1")}));
-const pstat=t=>{const e=$("pstat");if(e)e.textContent=t};
+const pstat=t=>{const e=$("pstat");if(e)e.textContent=/error|can't/i.test(t||"")?t:""};
 function setPlaying(b){$("play").textContent=b?"⏸":"▶";$("vinyl").classList.toggle("on",!!b)}
 function setProg(f){$("fill").style.width=(Math.max(0,Math.min(1,f||0))*100)+"%"}
 function songEnded(){const t=Date.now();if(t-lastEnd>2000){lastEnd=t;$("next").click()}}
@@ -108,7 +107,13 @@ function playSong(i){
       pstat("YouTube loading…");
       yt=new YT.Player("ytdiv",{width:"100%",height:220,videoId:id,playerVars:{autoplay:1,playsinline:1,rel:0},events:{
         onReady:()=>{if(my!==token)return;
-          ctrl={toggle:()=>{const s=yt.getPlayerState();if(s===1||s===3)yt.pauseVideo();else yt.playVideo()},seek:f=>{const t=yt.getDuration();if(t)yt.seekTo(f*t,true)}};
+          ctrl={toggle:()=>{
+            const now=Date.now();if(now-(window.__lt||0)<350)return;window.__lt=now;
+            const s=yt.getPlayerState(),pause=(s===1||s===3);
+            pstat("pressed: state "+s+" → "+(pause?"pause":"play"));
+            if(pause){yt.pauseVideo();
+              setTimeout(()=>{try{if(yt.getPlayerState()===1){const f=$("embed").querySelector("iframe");f&&f.contentWindow.postMessage(JSON.stringify({event:"command",func:"pauseVideo",args:[]}),"*");pstat("pause retry sent")}}catch(e){}},600)}
+            else yt.playVideo()},seek:f=>{const t=yt.getDuration();if(t)yt.seekTo(f*t,true)}};
           pstat("YouTube ready");try{yt.playVideo()}catch(e){}},
         onStateChange:e=>{if(my!==token)return;
           if(e.data===1){setPlaying(true);pstat("▶ playing")}
